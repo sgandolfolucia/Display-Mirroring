@@ -22,6 +22,7 @@
 #include "ili9341_touch.h"
 #include "ILI9341_STM32_Driver.h"
 #include "ILI9341_GFX.h"
+#include "display_settings.h"
 #include "w6x_types.h"
 
 static void wireless_screen_update_task(void *arg);
@@ -68,7 +69,7 @@ void server_init() {
   }
 
   if(sockopts(sock, timeout) != 0) {
-    goto _err; // error logging is already done in the function called
+    goto _err; // error logging is handled in the function called
   }
 
   /* Bind the socket to the server address */
@@ -101,11 +102,11 @@ void server_init() {
       /* Create a thread to process the incoming screen update */
       xTaskCreate((TaskFunction_t)display_driver_task, NULL,
             CHILD_TASK_STACK_SIZE >> 2U,
-            &newconn, 10, NULL);  
+            (void*)newconn, DISPLAY_THREAD_PRIO, NULL);  
 
       xTaskCreate((TaskFunction_t)wireless_screen_update_task, NULL,
                                 CHILD_TASK_STACK_SIZE >> 2U,
-                                &newconn, 11, NULL);
+                                (void*)newconn, MIRROR_THREAD_PRIO, NULL);
       
       /* Delay added to avoid that too many requests are processed in parallel */
       vTaskDelay(pdMS_TO_TICKS(50));
@@ -117,10 +118,6 @@ void server_init() {
     }
   }
   
-  /* USER CODE BEGIN http_server_socket_2 */
-
-  /* USER CODE END http_server_socket_2 */
-
   _err:
   /* Error case */
   if (sock >= 0)
@@ -137,7 +134,7 @@ void client_init() {
   int32_t ret;
   int sock = -1;
   struct sockaddr_in addr = {0};
-  uint8_t server_ip[] = {10, 19, 96, 1}; // specified to always be the same by the server
+  uint8_t server_ip[] = {10, 19, 96, 1}; // specified by the server in w6x_config.h
   addr.sin_family = AF_INET;
   addr.sin_port = PP_HTONS(PORT);
   addr.sin_addr.s_addr = ATON(server_ip);
@@ -163,11 +160,11 @@ void client_init() {
   /* create the tasks for managing display mirroring over wifi */
   xTaskCreate((TaskFunction_t)display_driver_task, NULL,
             CHILD_TASK_STACK_SIZE >> 2U,
-            &sock, 10, NULL); 
+            (void*)sock, DISPLAY_THREAD_PRIO, NULL); 
             
   xTaskCreate((TaskFunction_t)wireless_screen_update_task, NULL,
             CHILD_TASK_STACK_SIZE >> 2U,
-            &sock, 11, NULL);
+            (void*)sock, MIRROR_THREAD_PRIO, NULL);
 
   while(1) vTaskDelay(pdMS_TO_TICKS(1000)); // replace with task notification
   _err:
@@ -182,9 +179,8 @@ void client_init() {
 }
 
 static void wireless_screen_update_task(void *arg) {
-  int32_t connection = *((int32_t *)arg);
+  int32_t connection = (int32_t)arg;
   int32_t bytes_received;
-
   ssize_t recv_buffer_len = CHILD_TASK_BUFFER_SIZE;
   char *recv_buffer = (char *)pvPortMalloc(recv_buffer_len);
   if (recv_buffer == NULL)
@@ -200,6 +196,7 @@ static void wireless_screen_update_task(void *arg) {
     bytes_received = W6X_Net_Recv(connection, (uint8_t *)recv_buffer, 4, 0);
     if (bytes_received <= 0) /* No data received or error */
     {
+      vTaskDelay(pdMS_TO_TICKS(50));
       continue;
     }
     
@@ -216,7 +213,11 @@ static void wireless_screen_update_task(void *arg) {
 }
 
 static void display_driver_task(void *arg) {
-  int32_t connection = *((int32_t *)arg);
+  uint8_t ip[4] = {0};
+  uint8_t netmask[4] = {0};
+  W6X_Net_AP_GetIPAddress(ip, netmask);
+  LogInfo("ip " IPSTR "\n", IP2STR(ip));
+  int32_t connection = (int32_t)arg;
   uint16_t x, y;
   uint16_t tx_draw_data[2];
 
@@ -231,13 +232,13 @@ static void display_driver_task(void *arg) {
       /* acquire a lock here: display driver is NOT thread safe */
       if (osMutexAcquire(mutex, osWaitForever) != osOK) continue;
 
-      ILI9341_Draw_Rectangle(x, y, 2, 2, PINK); // draw where the input is detected
+      ILI9341_Draw_Rectangle(x, y, PENHEIGHT, PENWIDTH, PENCOLOR); // draw where the input is detected
       
       /* release it: only display writes need to be guarded */
       osMutexRelease(mutex);
 
-      if (W6X_Net_Send(connection, (uint8_t *)tx_draw_data, 4, 0) == -1) {
-        //W6X_Net_GetConnectionStatus(uint8_t socket, uint8_t *protocol, uint32_t *remote_ip, uint32_t *remote_port, uint32_t *local_port, uint8_t *type)
+      if(W6X_Net_Send(connection, (uint8_t *)tx_draw_data, 4, 0) == -1) {
+        /* if Net_Send fails repeatedly the network driver may need to be reset in real time */      
       }
     } else vTaskDelay(pdMS_TO_TICKS(100)); // yield to prevent collisions with higher priority tasks
   }    
@@ -254,7 +255,7 @@ static void mirror(int32_t conection, char *recv_buffer) {
   /* ensure mutual exlcusion with the display driver task */
   if (osMutexAcquire(mutex, osWaitForever) == osOK) {
 
-    ILI9341_Draw_Rectangle(x_value, y_value, 2, 2, PINK);
+    ILI9341_Draw_Rectangle(x_value, y_value, PENWIDTH, PENHEIGHT, PENCOLOR);
       
     /* release immediately so the display driver task can resume */
     osMutexRelease(mutex);
@@ -262,6 +263,7 @@ static void mirror(int32_t conection, char *recv_buffer) {
 }
 
 int sockopts(int32_t sock, int32_t timeout) {
+  int keep_alive = 1;
   
   /* Set the socket Receive timeout option */
   if (W6X_Net_Setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void *)&timeout, sizeof(timeout)) != 0)
@@ -278,7 +280,7 @@ int sockopts(int32_t sock, int32_t timeout) {
   }
 
   /* Set the socket Send timeout option */
-  if (W6X_Net_Setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&timeout, sizeof(timeout)) != 0)
+  if (W6X_Net_Setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keep_alive, sizeof(keep_alive)) != 0)
   {
     LogError("Could not set the socket options.\n");
     return -1;

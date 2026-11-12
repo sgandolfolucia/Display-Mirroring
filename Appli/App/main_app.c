@@ -41,7 +41,7 @@
 #error "low power standby mode not supported"
 #endif /* LOW_POWER_MODE */
 
-#define SERVER
+//#define SERVER
 
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -155,9 +155,10 @@ void main_app(void)
 
   /* initialize the display */
   ILI9341_Init(); // must be done after kernel initialization to prevent collision with freeRTOS tick priority
-  ILI9341_Fill_Screen(WHITE);
+  ILI9341_Fill_Screen(WHITE); // begin with a blank slate
 
 #ifdef SERVER
+  /* server code: initialize the soft-AP */
   W6X_WiFi_ApConfig_t ap_config = {0};
   ap_config.Channel = WIFI_SAP_CHANNEL;
   ap_config.Security = WIFI_SAP_SECURITY;
@@ -177,11 +178,9 @@ void main_app(void)
     LogInfo("Soft-AP started\n");
   }
 
-  /* create child task that will manage drawing to the display */
-
-  server_init();
+  server_init(); // never returns
 #else
-  /* client code */
+  /* client code: connect to the soft-AP */
   W6X_WiFi_Connect_Opts_t connect_opts = {0};
   strncpy((char *)connect_opts.SSID, WIFI_SAP_SSID, W6X_WIFI_MAX_SSID_SIZE);
   strncpy((char *)connect_opts.Password, WIFI_SAP_PASSWORD, W6X_WIFI_MAX_PASSWORD_SIZE);
@@ -193,7 +192,7 @@ void main_app(void)
     goto _err;
   }
 
-  client_init();
+  client_init(); // never returns
 #endif
 
   /* USER CODE END main_app_3 */

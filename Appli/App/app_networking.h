@@ -4,7 +4,9 @@
 
 #define CHILD_TASK_STACK_SIZE   2048
 
-#define CHILD_THREAD_PRIO       29
+#define MIRROR_THREAD_PRIO      20
+
+#define DISPLAY_THREAD_PRIO     10
 
 #define CHILD_TASK_BUFFER_SIZE  16
 
