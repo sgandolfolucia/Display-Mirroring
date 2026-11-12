@@ -1,5 +1,5 @@
 # Display Mirror
-This is a project combining a pair STM32-U575ZI-Qs and ILI9341 based displays and mirroring their touch input over WiFi. One STM32 acts as server creating a Soft-AP and waiting for connections,and the other acts as a simple client and connects to the established Soft-AP. Besides that, the logic is the same across both STM32s.
+This is a project combining a pair STM32-U575ZI-Qs and ILI9341 based displays and mirroring their touch input over WiFi. One STM32 acts as server creating a Soft-AP and waiting for connections, and the other acts as a simple client and connects to the established Soft-AP. Besides that, the logic is the same across both STM32s.
 
 As is, this proof of concept can be used to play any game that would be played using a pen and paper without having to share the same physical pen and paper.
 
@@ -7,4 +7,10 @@ This implementation uses the basic display driver provided [here](https://github
 
 
 ## Why Wifi?
-While a wireless technology like Bluetooth would work for this proof of concept, opting for WiFi increases the possibilities for future improvements, such as setting up a centralized server and mirroring display input across displays connected to different networks. 
+While a wireless technology like Bluetooth would work for this proof of concept, opting for WiFi increases the possibilities for future improvements, such as setting up a centralized server and mirroring display input across displays connected to different networks.
+
+## Possible Future Expansions
+- Mirroring three or more displays
+- Mirroring via centralized server
+- Offloading WiFi processing to an ESP32
+- Mirroring pictures (.jpeg, .png)
