@@ -21,9 +21,6 @@ bool t_pressed() {
 bool t_getcoordinates(uint16_t* x, uint16_t* y) {
     static const uint8_t cmd_read_x[] = { READ_X, 0, 0 };
     static const uint8_t cmd_read_y[] = { READ_Y, 0, 0 };
-    //static const uint8_t zeroes_tx[] = { 0x00, 0x00 };
-
-    
 
     volatile uint64_t avg_x = 0;
     volatile uint64_t avg_y = 0;
@@ -60,9 +57,6 @@ bool t_getcoordinates(uint16_t* x, uint16_t* y) {
 
     if(raw_y < ILI9341_TOUCH_MIN_RAW_Y) raw_y = ILI9341_TOUCH_MIN_RAW_Y;
     if(raw_y > ILI9341_TOUCH_MAX_RAW_Y) raw_y = ILI9341_TOUCH_MAX_RAW_Y;
-
-    // Uncomment this line to calibrate touchscreen:
-    // UART_Printf("raw_x = %d, raw_y = %d\r\n", x, y);
 
     *x = (raw_x - ILI9341_TOUCH_MIN_RAW_X) * ILI9341_TOUCH_SCALE_X / (ILI9341_TOUCH_MAX_RAW_X - ILI9341_TOUCH_MIN_RAW_X);
     *y = ILI9341_TOUCH_SCALE_Y - ((raw_y - ILI9341_TOUCH_MIN_RAW_Y) * ILI9341_TOUCH_SCALE_Y / (ILI9341_TOUCH_MAX_RAW_Y - ILI9341_TOUCH_MIN_RAW_Y));
